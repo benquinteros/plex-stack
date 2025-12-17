@@ -1,0 +1,238 @@
+# ============================================================================
+# Plex Stack - Docker Compose Configuration
+# ============================================================================
+#
+# OVERVIEW:
+# Complete media server stack including Plex, Sonarr, Radarr, Prowlarr,
+# Overseerr, qBittorrent, and FlareSolverr with PIA VPN protection.
+#
+# REQUIRED ENVIRONMENT VARIABLES:
+#   PUID             - User ID (e.g., 1000)
+#   PGID             - Group ID (e.g., 1000)
+#   TZ               - Timezone (e.g., America/Edmonton)
+#   BASE_PATH        - Docker config directory (e.g., /home/username/docker)
+#   MEDIA_SHARE      - Media storage path (e.g., /mnt/media)
+#   PIA_USERNAME     - Private Internet Access username
+#   PIA_PASSWORD     - Private Internet Access password
+#   PIA_REGION       - VPN region (optional, defaults to Australia)
+#   PLEX_CLAIM       - Plex claim token (get from plex.tv/claim)
+#
+# DIRECTORY STRUCTURE:
+# See: https://trash-guides.info/Hardlinks/Hardlinks-and-Instant-Moves/
+# Recommended structure for hardlinks and efficient file management:
+#   MEDIA_SHARE/
+#     ├── media/
+#     │   ├── movies/
+#     │   └── tv/
+#     └── downloads/
+#         ├── movies/
+#         ├── tv/
+#         └── incomplete/
+#
+# IMPORTANT NOTES:
+# - This configuration requires customization for your specific environment
+# - Review all paths, ports, and settings before deploying
+# - Ensure proper permissions on all mounted directories
+# - Port forward 8694 on your router for optimal seeding performance
+#
+# ============================================================================
+
+services:
+  # ============================================================================
+  # VPN Service
+  # ============================================================================
+
+  # PIA VPN via Gluetun - Protects all *arr services and qBittorrent traffic
+  # All services using network_mode: "service:pia-vpn" route through this VPN
+  pia-vpn:
+    image: qmcgaw/gluetun
+    container_name: pia-vpn
+    labels:
+      - "com.plexstack.description=VPN gateway for all *arr services and qBittorrent"
+      - "com.plexstack.service=vpn"
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=private internet access
+      - OPENVPN_USER=${PIA_USERNAME}
+      - OPENVPN_PASSWORD=${PIA_PASSWORD}
+      - SERVER_REGIONS=${PIA_REGION:-Australia}
+    volumes:
+      - ${BASE_PATH}/gluetun:/gluetun
+    ports:
+      # Port mappings for services routing through this VPN container
+      - 7878:7878    # Radarr - Movie management
+      - 8989:8989    # Sonarr - TV show management
+      - 9696:9696    # Prowlarr - Indexer management
+      - 5055:5055    # Overseerr - Media requests
+      - 8080:8080    # qBittorrent - Torrent client
+      - 8694:8694    # qBittorrent - Incoming connections (port forward this on your router)
+      - 8191:8191    # FlareSolverr - Cloudflare bypass
+      - 8000:8000    # Gluetun - Control server (optional)
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://www.google.com"]
+      interval: 60s
+      timeout: 15s
+      retries: 5
+      start_period: 30s
+
+  # ============================================================================
+  # Media Server
+  # ============================================================================
+
+  # Plex Media Server - Organizes and streams your media library
+  # Alternative options: Emby, Jellyfin
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    labels:
+      - "com.plexstack.description=Media streaming server"
+      - "com.plexstack.service=media-server"
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM}
+    # Hardware acceleration (disabled by default for Windows compatibility)
+    # Uncomment for Intel QuickSync support (8th gen or newer CPU required):
+    # devices:
+    #   - /dev/dri:/dev/dri
+    ports:
+      - 32400:32400
+    volumes:
+      - ${BASE_PATH}/plex/config:/config
+      - ${MEDIA_SHARE}/media/tv:/tv
+      - ${MEDIA_SHARE}/media/movies:/movies
+    restart: unless-stopped
+
+  # ============================================================================
+  # Content Management (*arr Suite)
+  # ============================================================================
+
+  # Radarr - Automated movie collection manager
+  # Monitors, downloads, and organizes movies from Usenet/torrents
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    labels:
+      - "com.plexstack.description=Movie collection manager"
+      - "com.plexstack.service=content-management"
+    network_mode: "service:pia-vpn"
+    depends_on:
+      - pia-vpn
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/radarr/config:/config
+      - ${MEDIA_SHARE}:/share  # Full media share access for hardlinks
+    restart: unless-stopped
+
+  # Sonarr - Automated TV show collection manager
+  # Monitors, downloads, and organizes TV shows from Usenet/torrents
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    labels:
+      - "com.plexstack.description=TV show collection manager"
+      - "com.plexstack.service=content-management"
+    network_mode: "service:pia-vpn"
+    depends_on:
+      - pia-vpn
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/sonarr/config:/config
+      - ${MEDIA_SHARE}:/share  # Full media share access for hardlinks
+    restart: unless-stopped
+
+  # Prowlarr - Indexer manager and proxy
+  # Centrally manages indexers for Sonarr, Radarr, and other *arr apps
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    labels:
+      - "com.plexstack.description=Indexer manager and proxy"
+      - "com.plexstack.service=content-management"
+    network_mode: "service:pia-vpn"
+    depends_on:
+      - pia-vpn
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/prowlarr/config:/config
+    restart: unless-stopped
+
+  # Overseerr - Media request and discovery platform
+  # Allows users to request movies/TV shows with approval workflows
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    container_name: overseerr
+    labels:
+      - "com.plexstack.description=Media request and discovery platform"
+      - "com.plexstack.service=content-management"
+    network_mode: "service:pia-vpn"
+    depends_on:
+      - pia-vpn
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - ${BASE_PATH}/overseerr/config:/config
+      - ${MEDIA_SHARE}:/share  # Full media share access
+    restart: unless-stopped
+
+  # ============================================================================
+  # Supporting Services
+  # ============================================================================
+
+  # FlareSolverr - Cloudflare protection bypass
+  # Solves Cloudflare challenges for indexers that require it
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    labels:
+      - "com.plexstack.description=Cloudflare protection bypass"
+      - "com.plexstack.service=support"
+    network_mode: "service:pia-vpn"
+    depends_on:
+      - pia-vpn
+    environment:
+      - LOG_LEVEL=info
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    restart: unless-stopped
+
+  # qBittorrent - BitTorrent client
+  # Alternative options: rTorrent/ruTorrent, Transmission, Deluge
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    labels:
+      - "com.plexstack.description=BitTorrent client"
+      - "com.plexstack.service=download-client"
+    network_mode: "service:pia-vpn"
+    depends_on:
+      - pia-vpn
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=8694  # Port forward this in your router for optimal seeding
+    volumes:
+      - ${BASE_PATH}/qbittorrent/config:/config
+      - ${MEDIA_SHARE}:/share
+    restart: unless-stopped
+
