@@ -87,7 +87,7 @@ $directories = @(
     "$BasePath\radarr\config",
     "$BasePath\sonarr\config",
     "$BasePath\prowlarr\config",
-    "$BasePath\overseerr\config",
+    "$BasePath\seerr\config",
     "$BasePath\qbittorrent\config",
     "$BasePath\gluetun",
     # Media directories
@@ -200,11 +200,11 @@ VPN_CITY=
 # Get your claim token from: https://www.plex.tv/claim/
 PLEX_CLAIM=claim-xxxxxxxxxxxxxxxxxxxx
 
-# Cloudflare Tunnel Configuration (optional, for public Overseerr URL)
+# Cloudflare Tunnel Configuration (optional, for public Seerr URL)
 # Create tunnel in Cloudflare Zero Trust and paste token here
 CF_TUNNEL_TOKEN=
-# Set this URL in Overseerr -> Settings -> General -> Application URL
-OVERSEERR_PUBLIC_URL=https://requests.yourdomain.com
+# Set this URL in Seerr -> Settings -> General -> Application URL
+SEERR_PUBLIC_URL=https://requests.yourdomain.com
 
 # ============================================================================
 # Next Steps:
@@ -216,12 +216,12 @@ OVERSEERR_PUBLIC_URL=https://requests.yourdomain.com
 #    - Radarr: http://localhost:7878
 #    - Sonarr: http://localhost:8989
 #    - Prowlarr: http://localhost:9696
-#    - Overseerr: http://localhost:5055
+#    - Seerr: http://localhost:5055
 #    - qBittorrent: http://localhost:8080
-# 5. Optional public Overseerr URL:
+# 5. Optional public Seerr URL:
 #    - Set CF_TUNNEL_TOKEN and cloudflared will start on: docker-compose up -d
 #    - Configure Cloudflare Tunnel hostname -> http://vpn:5055
-#    - Set Overseerr Application URL to OVERSEERR_PUBLIC_URL
+#    - Set Seerr Application URL to SEERR_PUBLIC_URL
 # ============================================================================
 "@
 

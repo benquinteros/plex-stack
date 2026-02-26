@@ -4,7 +4,7 @@
 #
 # OVERVIEW:
 # Complete media server stack including Plex, Sonarr, Radarr, Prowlarr,
-# Overseerr, qBittorrent, and FlareSolverr with PIA VPN protection.
+# Seerr, qBittorrent, and FlareSolverr with PIA VPN protection.
 #
 # REQUIRED ENVIRONMENT VARIABLES:
 #   PUID             - User ID (e.g., 1000)
@@ -19,7 +19,7 @@
 #   VPN_COUNTRY      - VPN country (optional)
 #   VPN_CITY         - VPN city (optional)
 #   PLEX_CLAIM       - Plex claim token (get from plex.tv/claim)
-#   CF_TUNNEL_TOKEN  - Cloudflare Tunnel token (optional, for public Overseerr URL)
+#   CF_TUNNEL_TOKEN  - Cloudflare Tunnel token (optional, for public Seerr URL)
 #
 # DIRECTORY STRUCTURE:
 # See: https://trash-guides.info/Hardlinks/Hardlinks-and-Instant-Moves/
@@ -180,22 +180,22 @@ services:
       - ${BASE_PATH}/prowlarr/config:/config
     restart: unless-stopped
 
-  # Overseerr - Media request and discovery platform
+  # Seerr - Media request and discovery platform
   # Allows users to request movies/TV shows with approval workflows
-  overseerr:
-    image: lscr.io/linuxserver/overseerr:latest
-    container_name: overseerr
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    init: true
+    container_name: seerr
     labels:
       - "com.plexstack.description=Media request and discovery platform"
       - "com.plexstack.service=content-management"
     ports:
       - 5055:5055
     environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
+      - LOG_LEVEL=info
       - TZ=${TZ}
     volumes:
-      - ${BASE_PATH}/overseerr/config:/config
+      - ${BASE_PATH}/seerr/config:/app/config
       - ${MEDIA_SHARE}:/share  # Full media share access
     restart: unless-stopped
 
@@ -243,7 +243,7 @@ services:
       - ${MEDIA_SHARE}:/share
     restart: unless-stopped
 
-  # Cloudflare Tunnel - Public HTTPS URL for Overseerr (no port forwarding)
+  # Cloudflare Tunnel - Public HTTPS URL for Seerr (no port forwarding)
   # Configure tunnel in Cloudflare Zero Trust, then set CF_TUNNEL_TOKEN in .env
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -255,7 +255,7 @@ services:
     environment:
       - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
     depends_on:
-      - overseerr
+      - seerr
     restart: "no"
 
   # Watchtower - Automatic container updates
