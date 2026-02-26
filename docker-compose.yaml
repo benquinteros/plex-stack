@@ -258,3 +258,18 @@ services:
       - overseerr
     restart: "no"
 
+  # Watchtower - Automatic container updates
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: watchtower
+    labels:
+      - "com.plexstack.description=Automatic container updater"
+      - "com.plexstack.service=support"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - TZ=${TZ}
+      - DOCKER_API_VERSION=1.44
+    command: --cleanup --schedule "0 0 5 * * *"
+    restart: unless-stopped
+
