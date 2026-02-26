@@ -185,15 +185,26 @@ TZ=$timezone
 BASE_PATH=$basePathLinux
 MEDIA_SHARE=$mediaPathLinux
 
-# PIA VPN Configuration
-# Get your credentials from: https://www.privateinternetaccess.com/
-PIA_USERNAME=your_pia_username
-PIA_PASSWORD=your_pia_password
-PIA_REGION=US East
+# VPN Configuration (Gluetun)
+# Supported providers: https://github.com/qdm12/gluetun-wiki/tree/main/setup/providers
+# Example provider values: expressvpn, private internet access
+VPN_PROVIDER=expressvpn
+VPN_USERNAME=your_vpn_username
+VPN_PASSWORD=your_vpn_password
+# Optional location selectors (provider-dependent)
+VPN_REGION=
+VPN_COUNTRY=
+VPN_CITY=
 
 # Plex Configuration
 # Get your claim token from: https://www.plex.tv/claim/
 PLEX_CLAIM=claim-xxxxxxxxxxxxxxxxxxxx
+
+# Cloudflare Tunnel Configuration (optional, for public Overseerr URL)
+# Create tunnel in Cloudflare Zero Trust and paste token here
+CF_TUNNEL_TOKEN=
+# Set this URL in Overseerr -> Settings -> General -> Application URL
+OVERSEERR_PUBLIC_URL=https://requests.yourdomain.com
 
 # ============================================================================
 # Next Steps:
@@ -201,12 +212,16 @@ PLEX_CLAIM=claim-xxxxxxxxxxxxxxxxxxxx
 # 2. Run: docker-compose pull
 # 3. Run: docker-compose up -d
 # 4. Access services:
-#    - Plex: http://localhost:32400/web
+#    - Plex: http://localhost:32401/web
 #    - Radarr: http://localhost:7878
 #    - Sonarr: http://localhost:8989
 #    - Prowlarr: http://localhost:9696
 #    - Overseerr: http://localhost:5055
 #    - qBittorrent: http://localhost:8080
+# 5. Optional public Overseerr URL:
+#    - Set CF_TUNNEL_TOKEN and cloudflared will start on: docker-compose up -d
+#    - Configure Cloudflare Tunnel hostname -> http://vpn:5055
+#    - Set Overseerr Application URL to OVERSEERR_PUBLIC_URL
 # ============================================================================
 "@
 

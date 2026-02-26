@@ -12,10 +12,14 @@
 #   TZ               - Timezone (e.g., America/Edmonton)
 #   BASE_PATH        - Docker config directory (e.g., /home/username/docker)
 #   MEDIA_SHARE      - Media storage path (e.g., /mnt/media)
-#   PIA_USERNAME     - Private Internet Access username
-#   PIA_PASSWORD     - Private Internet Access password
-#   PIA_REGION       - VPN region (optional, defaults to Australia)
+#   VPN_PROVIDER     - VPN provider for Gluetun (e.g., expressvpn, private internet access)
+#   VPN_USERNAME     - VPN username
+#   VPN_PASSWORD     - VPN password
+#   VPN_REGION       - VPN region (optional)
+#   VPN_COUNTRY      - VPN country (optional)
+#   VPN_CITY         - VPN city (optional)
 #   PLEX_CLAIM       - Plex claim token (get from plex.tv/claim)
+#   CF_TUNNEL_TOKEN  - Cloudflare Tunnel token (optional, for public Overseerr URL)
 #
 # DIRECTORY STRUCTURE:
 # See: https://trash-guides.info/Hardlinks/Hardlinks-and-Instant-Moves/
@@ -42,11 +46,11 @@ services:
   # VPN Service
   # ============================================================================
 
-  # PIA VPN via Gluetun - Protects all *arr services and qBittorrent traffic
-  # All services using network_mode: "service:pia-vpn" route through this VPN
-  pia-vpn:
+  # VPN via Gluetun - Protects all *arr services and qBittorrent traffic
+  # All services using network_mode: "service:vpn" route through this VPN
+  vpn:
     image: qmcgaw/gluetun
-    container_name: pia-vpn
+    container_name: vpn
     labels:
       - "com.plexstack.description=VPN gateway for all *arr services and qBittorrent"
       - "com.plexstack.service=vpn"
@@ -55,10 +59,15 @@ services:
     devices:
       - /dev/net/tun:/dev/net/tun
     environment:
-      - VPN_SERVICE_PROVIDER=private internet access
-      - OPENVPN_USER=${PIA_USERNAME}
-      - OPENVPN_PASSWORD=${PIA_PASSWORD}
-      - SERVER_REGIONS=${PIA_REGION:-Australia}
+      - VPN_SERVICE_PROVIDER=${VPN_PROVIDER}
+      - OPENVPN_USER=${VPN_USERNAME}
+      - OPENVPN_PASSWORD=${VPN_PASSWORD}
+      - OPENVPN_PROTOCOL=udp
+      - SERVER_REGIONS=${VPN_REGION:-}
+      - SERVER_COUNTRIES=${VPN_COUNTRY:-}
+      - SERVER_CITIES=${VPN_CITY:-}
+      - HEALTH_TARGET_ADDRESS=1.1.1.1:443
+      - HEALTH_VPN_DURATION_INITIAL=45s
     volumes:
       - ${BASE_PATH}/gluetun:/gluetun
     ports:
@@ -66,7 +75,6 @@ services:
       - 7878:7878    # Radarr - Movie management
       - 8989:8989    # Sonarr - TV show management
       - 9696:9696    # Prowlarr - Indexer management
-      - 5055:5055    # Overseerr - Media requests
       - 8080:8080    # qBittorrent - Torrent client
       - 8694:8694    # qBittorrent - Incoming connections (port forward this on your router)
       - 8191:8191    # FlareSolverr - Cloudflare bypass
@@ -102,7 +110,7 @@ services:
     # devices:
     #   - /dev/dri:/dev/dri
     ports:
-      - 32400:32400
+      - 32401:32400
     volumes:
       - ${BASE_PATH}/plex/config:/config
       - ${MEDIA_SHARE}/media/tv:/tv
@@ -121,9 +129,9 @@ services:
     labels:
       - "com.plexstack.description=Movie collection manager"
       - "com.plexstack.service=content-management"
-    network_mode: "service:pia-vpn"
+    network_mode: "service:vpn"
     depends_on:
-      - pia-vpn
+      - vpn
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -141,9 +149,9 @@ services:
     labels:
       - "com.plexstack.description=TV show collection manager"
       - "com.plexstack.service=content-management"
-    network_mode: "service:pia-vpn"
+    network_mode: "service:vpn"
     depends_on:
-      - pia-vpn
+      - vpn
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -161,9 +169,9 @@ services:
     labels:
       - "com.plexstack.description=Indexer manager and proxy"
       - "com.plexstack.service=content-management"
-    network_mode: "service:pia-vpn"
+    network_mode: "service:vpn"
     depends_on:
-      - pia-vpn
+      - vpn
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -180,9 +188,8 @@ services:
     labels:
       - "com.plexstack.description=Media request and discovery platform"
       - "com.plexstack.service=content-management"
-    network_mode: "service:pia-vpn"
-    depends_on:
-      - pia-vpn
+    ports:
+      - 5055:5055
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -204,9 +211,9 @@ services:
     labels:
       - "com.plexstack.description=Cloudflare protection bypass"
       - "com.plexstack.service=support"
-    network_mode: "service:pia-vpn"
+    network_mode: "service:vpn"
     depends_on:
-      - pia-vpn
+      - vpn
     environment:
       - LOG_LEVEL=info
       - PUID=${PUID}
@@ -222,9 +229,9 @@ services:
     labels:
       - "com.plexstack.description=BitTorrent client"
       - "com.plexstack.service=download-client"
-    network_mode: "service:pia-vpn"
+    network_mode: "service:vpn"
     depends_on:
-      - pia-vpn
+      - vpn
     environment:
       - PUID=${PUID}
       - PGID=${PGID}
@@ -235,4 +242,19 @@ services:
       - ${BASE_PATH}/qbittorrent/config:/config
       - ${MEDIA_SHARE}:/share
     restart: unless-stopped
+
+  # Cloudflare Tunnel - Public HTTPS URL for Overseerr (no port forwarding)
+  # Configure tunnel in Cloudflare Zero Trust, then set CF_TUNNEL_TOKEN in .env
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    labels:
+      - "com.plexstack.description=Cloudflare Tunnel for secure public access"
+      - "com.plexstack.service=support"
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    depends_on:
+      - overseerr
+    restart: "no"
 
